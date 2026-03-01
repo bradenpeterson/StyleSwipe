@@ -5,14 +5,18 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { TAXONOMY, getAllTags } from '../../constants/tags';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Chip } from '../../components/ui/Chip';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
+import { colors, spacing, typography } from '../../constants/theme';
 
 const CATEGORY_LABELS = {
   style: 'Style',
@@ -55,12 +59,12 @@ export default function ProfileScreen() {
       ]);
       const withScores = new Set(
         Object.entries(scores)
-          .filter(([, v]) => typeof v === 'number' && v > 0)
-          .map(([k]) => k)
+          .filter(([, value]) => typeof value === 'number' && value > 0)
+          .map(([key]) => key)
       );
       setSelectedTags(new Set([...preferred, ...withScores]));
-    } catch (e) {
-      setError(e?.message ?? 'Failed to load profile');
+    } catch (loadError) {
+      setError(loadError?.message ?? 'Failed to load profile');
     } finally {
       setLoading(false);
     }
@@ -74,8 +78,8 @@ export default function ProfileScreen() {
     try {
       await signOut();
       router.replace('/sign-up');
-    } catch (e) {
-      console.error('Logout error:', e);
+    } catch {
+      // Keep existing behavior: fail silently and stay on profile.
     }
   };
 
@@ -104,9 +108,9 @@ export default function ProfileScreen() {
           newScores[tag] = 0;
         }
       }
-      const preferred_styles = TAXONOMY.style.filter((t) => selectedTags.has(t));
-      const preferred_colors = TAXONOMY.color.filter((t) => selectedTags.has(t));
-      const preferred_categories = TAXONOMY.category.filter((t) => selectedTags.has(t));
+      const preferred_styles = TAXONOMY.style.filter((tag) => selectedTags.has(tag));
+      const preferred_colors = TAXONOMY.color.filter((tag) => selectedTags.has(tag));
+      const preferred_categories = TAXONOMY.category.filter((tag) => selectedTags.has(tag));
 
       const { error: updateError } = await supabase
         .from('profiles')
@@ -120,16 +124,16 @@ export default function ProfileScreen() {
         .eq('id', user.id);
 
       if (updateError) throw updateError;
-      setProfile((p) => ({
-        ...p,
+      setProfile((prev) => ({
+        ...prev,
         tag_scores: newScores,
         preferred_styles,
         preferred_colors,
         preferred_categories,
       }));
       setSaveMessage('Saved');
-    } catch (e) {
-      setSaveMessage(e?.message ?? 'Failed to save');
+    } catch (saveError) {
+      setSaveMessage(saveError?.message ?? 'Failed to save');
     } finally {
       setSaveLoading(false);
     }
@@ -137,8 +141,8 @@ export default function ProfileScreen() {
 
   const padding = {
     paddingTop: insets.top + spacing.lg,
-    paddingBottom: insets.bottom + spacing.xl,
-    paddingHorizontal: spacing.xl + Math.max(insets.left, insets.right),
+    paddingBottom: insets.bottom + spacing.xxl,
+    paddingHorizontal: spacing.lg + Math.max(insets.left, insets.right),
   };
 
   if (!user) return null;
@@ -146,9 +150,10 @@ export default function ProfileScreen() {
   if (loading && !profile) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={styles.loadingWrap}>
+          <SkeletonLoader width={84} height={84} borderRadius={42} />
+          <SkeletonLoader width="60%" height={20} />
+          <SkeletonLoader width="100%" height={120} />
         </View>
       </View>
     );
@@ -157,12 +162,13 @@ export default function ProfileScreen() {
   if (error && !profile) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          emoji="!"
+          title="Couldn't load profile"
+          description={error}
+          actionLabel="Retry"
+          onAction={loadProfile}
+        />
       </View>
     );
   }
@@ -175,7 +181,7 @@ export default function ProfileScreen() {
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.avatarRow}>
+      <View style={styles.avatarBlock}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initial}</Text>
         </View>
@@ -184,58 +190,38 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Adjust your tags</Text>
-        <Text style={styles.sectionSubtitle}>
-          Select tags that match your preferences. They influence your feed and recommendations.
-        </Text>
-        {Object.entries(TAXONOMY).map(([key, tags]) => (
-          <View key={key} style={styles.categoryBlock}>
-            <Text style={styles.categoryLabel}>{CATEGORY_LABELS[key] ?? key}</Text>
-            <View style={styles.chipRowWrap}>
-              {tags.map((tag) => {
-                const selected = selectedTags.has(tag);
-                return (
-                  <TouchableOpacity
-                    key={tag}
-                    style={[styles.tagChip, selected && styles.tagChipSelected]}
-                    onPress={() => toggleTag(tag)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
-                      {tag}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        ))}
-        {saveMessage ? (
-          <Text style={saveMessage === 'Saved' ? styles.saveSuccess : styles.saveError}>
-            {saveMessage}
-          </Text>
-        ) : null}
-        <TouchableOpacity
-          style={[styles.saveButton, saveLoading && styles.saveButtonDisabled]}
-          onPress={handleSavePreferences}
-          disabled={saveLoading}
-          activeOpacity={0.8}
-        >
-          {saveLoading ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <Text style={styles.saveButtonText}>Save preferences</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      <Card style={styles.section}>
+        <View style={styles.sectionInner}>
+          <Text style={styles.sectionTitle}>Style Preferences</Text>
+          <Text style={styles.sectionSubtitle}>Tune your tags for more relevant looks.</Text>
 
-      <TouchableOpacity
-        style={styles.logoutButton}
-        onPress={handleLogout}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.logoutButtonText}>Log out</Text>
+          {Object.entries(TAXONOMY).map(([key, tags]) => (
+            <View key={key} style={styles.categoryBlock}>
+              <Text style={styles.categoryLabel}>{CATEGORY_LABELS[key] ?? key}</Text>
+              <View style={styles.chipWrap}>
+                {tags.map((tag) => (
+                  <Chip
+                    key={tag}
+                    label={tag}
+                    selected={selectedTags.has(tag)}
+                    onPress={() => toggleTag(tag)}
+                    tone="accent"
+                  />
+                ))}
+              </View>
+            </View>
+          ))}
+
+          {saveMessage ? (
+            <Text style={saveMessage === 'Saved' ? styles.saveSuccess : styles.saveError}>{saveMessage}</Text>
+          ) : null}
+
+          <Button label="Save preferences" onPress={handleSavePreferences} loading={saveLoading} />
+        </View>
+      </Card>
+
+      <TouchableOpacity style={styles.signOutWrap} onPress={handleLogout}>
+        <Text style={styles.signOutText}>Sign out</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -247,134 +233,74 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: spacing.xxl,
+    gap: spacing.xl,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
+  loadingWrap: {
+    gap: spacing.md,
     alignItems: 'center',
-    gap: spacing.lg,
   },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.error,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-  },
-  retryButtonText: {
-    ...typography.link,
-    color: colors.primary,
-  },
-  avatarRow: {
+  avatarBlock: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    gap: spacing.sm,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
   },
   avatarText: {
-    ...typography.title,
-    fontSize: 28,
-    color: colors.text,
+    ...typography.heading,
   },
   email: {
-    ...typography.body,
-    color: colors.textSecondary,
+    ...typography.subheading,
+    color: colors.textPrimary,
   },
   section: {
-    marginBottom: spacing.xl,
+    borderRadius: 16,
+  },
+  sectionInner: {
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   sectionTitle: {
-    ...typography.title,
-    fontSize: 20,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    ...typography.heading,
   },
   sectionSubtitle: {
     ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
   },
   categoryBlock: {
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
   },
   categoryLabel: {
     ...typography.label,
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
   },
-  chipRowWrap: {
+  chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  tagChip: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tagChipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  tagChipText: {
-    ...typography.caption,
-    color: colors.text,
-  },
-  tagChipTextSelected: {
-    color: colors.primaryForeground,
+    gap: spacing.sm,
   },
   saveSuccess: {
     ...typography.caption,
-    color: colors.primary,
-    marginBottom: spacing.sm,
+    color: colors.accent,
   },
   saveError: {
     ...typography.caption,
-    color: colors.error,
-    marginBottom: spacing.sm,
+    color: colors.destructive,
   },
-  saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.md,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
+  signOutWrap: {
+    minHeight: 44,
     alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
-  },
-  logoutButton: {
-    marginTop: spacing.xl,
-    paddingVertical: spacing.md,
-    minHeight: minTouchTarget,
     justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
-  logoutButtonText: {
-    ...typography.link,
-    color: colors.error,
+  signOutText: {
+    ...typography.body,
+    color: colors.destructive,
   },
 });

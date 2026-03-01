@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { PickerTile } from '../../components/onboarding/PickerTile';
+import { Button } from '../../components/ui/Button';
 import { supabase } from '../../lib/supabase';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 
 const COLOR_OPTIONS = ['Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Pink', 'Purple', 'Brown', 'Gray'];
 
@@ -56,40 +57,25 @@ export default function ColorPickerScreen() {
         },
       ]}
     >
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.title}>What colors do you love?</Text>
-        <Text style={styles.subtitle}>
-          Select as many as you'd like. This helps us personalize your recommendations.
-        </Text>
+        <Text style={styles.subtitle}>Select as many as you'd like.</Text>
 
         <View style={styles.grid}>
-          {COLOR_OPTIONS.map((color) => (
+          {COLOR_OPTIONS.map((colorOption) => (
             <PickerTile
-              key={color}
-              label={color}
-              selected={selected.has(color)}
-              onPress={() => toggleColor(color)}
+              key={colorOption}
+              label={colorOption}
+              selected={selected.has(colorOption)}
+              onPress={() => toggleColor(colorOption)}
             />
           ))}
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        {error && <Text style={styles.error}>{error}</Text>}
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleNext}
-          disabled={loading || selected.size === 0}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Next"
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.primaryForeground} size="small" />
-          ) : (
-            <Text style={styles.buttonText}>Next</Text>
-          )}
-        </TouchableOpacity>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Button label="Next" onPress={handleNext} loading={loading} disabled={loading || selected.size === 0} />
       </View>
     </View>
   );
@@ -101,49 +87,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'space-between',
   },
-  scrollView: {
-    flex: 1,
+  content: {
+    paddingTop: spacing.xl,
   },
   title: {
-    ...typography.title,
-    color: colors.text,
-    marginBottom: spacing.md,
+    ...typography.heading,
     textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    ...typography.subtitle,
+    ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.xl,
     textAlign: 'center',
+    marginBottom: spacing.xl,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: spacing.xl,
   },
   footer: {
     gap: spacing.md,
   },
   error: {
     ...typography.caption,
-    color: colors.error,
+    color: colors.destructive,
     textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.lg,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
   },
 });

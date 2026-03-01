@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PickerTile } from '../../components/onboarding/PickerTile';
+import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../contexts/AuthContext';
 import { saveOnboardingStyleGoals } from '../../features/onboarding/onboardingProfileService';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 
 const STYLE_GOAL_OPTIONS = ['Casual', 'Professional', 'Trendy', 'Athletic', 'Minimalist', 'Bohemian', 'Streetwear', 'Classic'];
 
@@ -32,7 +33,6 @@ export default function StyleGoalScreen() {
     setError(null);
     setLoading(true);
     try {
-      // Keep onboarding persistence in a single domain service to avoid drift.
       await saveOnboardingStyleGoals(user.id, selected);
       router.push('/onboarding/swipe');
     } catch (err) {
@@ -53,40 +53,20 @@ export default function StyleGoalScreen() {
         },
       ]}
     >
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.title}>What style goals do you have?</Text>
-        <Text style={styles.subtitle}>
-          Select all that apply. This helps us understand your style.
-        </Text>
+        <Text style={styles.subtitle}>Select all that apply.</Text>
 
         <View style={styles.grid}>
           {STYLE_GOAL_OPTIONS.map((goal) => (
-            <PickerTile
-              key={goal}
-              label={goal}
-              selected={selected.has(goal)}
-              onPress={() => toggleGoal(goal)}
-            />
+            <PickerTile key={goal} label={goal} selected={selected.has(goal)} onPress={() => toggleGoal(goal)} />
           ))}
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <TouchableOpacity
-          style={[styles.button, (selected.size === 0 || loading) && styles.buttonDisabled]}
-          onPress={handleNext}
-          disabled={selected.size === 0 || loading}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Next"
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <Text style={styles.buttonText}>Next</Text>
-          )}
-        </TouchableOpacity>
+        <Button label="Next" onPress={handleNext} loading={loading} disabled={selected.size === 0 || loading} />
       </View>
     </View>
   );
@@ -98,48 +78,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'space-between',
   },
-  scrollView: {
-    flex: 1,
+  content: {
+    paddingTop: spacing.xl,
   },
   title: {
-    ...typography.title,
-    color: colors.text,
-    marginBottom: spacing.md,
+    ...typography.heading,
     textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    ...typography.subtitle,
+    ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.xl,
     textAlign: 'center',
+    marginBottom: spacing.xl,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: spacing.xl,
   },
   footer: {
     gap: spacing.md,
   },
   error: {
     ...typography.caption,
-    color: colors.error,
+    color: colors.destructive,
     textAlign: 'center',
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.lg,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
   },
 });

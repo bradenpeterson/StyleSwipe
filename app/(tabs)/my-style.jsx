@@ -1,45 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   TouchableOpacity,
   FlatList,
   Image,
   useWindowDimensions,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMyStyle } from '../../hooks/useMyStyle';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { Chip } from '../../components/ui/Chip';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
+import { colors, radii, spacing, typography } from '../../constants/theme';
 
 const NUM_COLUMNS = 2;
-const ASPECT_RATIO = 5 / 4; // height : width = 5 : 4
+const ASPECT_RATIO = 5 / 4;
 
-function StyleDnaBanner({ topTags }) {
-  if (topTags.length === 0) return null;
-  return (
-    <View style={styles.dnaWrap}>
-      <Text style={styles.dnaLabel}>Your style:</Text>
-      <View style={styles.chipRow}>
-        {topTags.map((tag) => (
-          <View key={tag} style={styles.chip}>
-            <Text style={styles.chipText}>{tag}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
+function GridItem({ item, itemWidth, itemHeight }) {
+  const [revealed, setRevealed] = useState(false);
 
-function GridItem({ item }) {
   if (!item?.image_url) return null;
+
   return (
-    <View style={styles.gridItem}>
+    <TouchableOpacity
+      style={[styles.gridItemWrap, { width: itemWidth, height: itemHeight }]}
+      activeOpacity={0.95}
+      onLongPress={() => setRevealed(true)}
+      onPressOut={() => setRevealed(false)}
+      delayLongPress={220}
+    >
       <Image source={{ uri: item.image_url }} style={styles.gridImage} resizeMode="cover" />
-    </View>
+      {revealed ? (
+        <View style={styles.removeOverlay}>
+          <Text style={styles.removeText}>Remove</Text>
+        </View>
+      ) : null}
+    </TouchableOpacity>
   );
 }
 
@@ -50,12 +51,11 @@ export default function MyStyleScreen() {
   const { user } = useAuth();
   const { items, topTags, loading, error, refetch } = useMyStyle(user?.id);
 
-  const horizontalPadding = spacing.xl + Math.max(insets.left, insets.right);
+  const horizontalPadding = spacing.lg + Math.max(insets.left, insets.right);
   const gap = spacing.sm;
   const contentWidth = Math.max(0, windowWidth - horizontalPadding * 2);
   const itemWidth = contentWidth > 0 ? (contentWidth - gap) / NUM_COLUMNS : 0;
   const itemHeight = itemWidth * ASPECT_RATIO;
-  const hasValidDimensions = itemWidth > 0 && itemHeight > 0;
 
   const padding = {
     paddingTop: insets.top + spacing.lg,
@@ -66,16 +66,13 @@ export default function MyStyleScreen() {
   if (!user) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>Sign in to see your style</Text>
-          <TouchableOpacity
-            style={styles.discoverLink}
-            onPress={() => router.replace('/login')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.discoverLinkText}>Sign in</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          emoji="🔒"
+          title="Sign in to see your style"
+          description="Your liked looks appear here once you're signed in."
+          actionLabel="Sign in"
+          onAction={() => router.replace('/login')}
+        />
       </View>
     );
   }
@@ -83,9 +80,16 @@ export default function MyStyleScreen() {
   if (loading && items.length === 0) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={styles.skeletonGrid}>
+          <SkeletonLoader width="100%" height={24} borderRadius={radii.pill} />
+          <View style={styles.gridRow}>
+            <SkeletonLoader width="48%" height={220} borderRadius={radii.card} />
+            <SkeletonLoader width="48%" height={220} borderRadius={radii.card} />
+          </View>
+          <View style={styles.gridRow}>
+            <SkeletonLoader width="48%" height={220} borderRadius={radii.card} />
+            <SkeletonLoader width="48%" height={220} borderRadius={radii.card} />
+          </View>
         </View>
       </View>
     );
@@ -94,45 +98,43 @@ export default function MyStyleScreen() {
   if (error) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>Something went wrong</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          emoji="!"
+          title="Couldn't load your style"
+          description="Try again in a moment."
+          actionLabel="Retry"
+          onAction={refetch}
+        />
       </View>
     );
   }
 
   return (
     <View style={[styles.container, padding]}>
-      <StyleDnaBanner topTags={topTags} />
+      <Text style={styles.header}>My Style</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dnaRow}>
+        {topTags.map((tag) => (
+          <Chip key={tag} label={tag} tone="accent" />
+        ))}
+      </ScrollView>
+
       {items.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>Nothing saved yet — start swiping</Text>
-          <TouchableOpacity
-            style={styles.discoverLink}
-            onPress={() => router.replace('/(tabs)/discover')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.discoverLinkText}>Go to Discover</Text>
-          </TouchableOpacity>
-        </View>
-      ) : !hasValidDimensions ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
+        <EmptyState
+          emoji="🧺"
+          title="Nothing saved yet"
+          description="Start swiping to build your style"
+          actionLabel="Go to Discover"
+          onAction={() => router.replace('/(tabs)/discover')}
+        />
       ) : (
         <FlatList
           data={items}
           numColumns={NUM_COLUMNS}
           keyExtractor={(item) => item.id}
-          columnWrapperStyle={[styles.row, { marginBottom: gap }]}
+          columnWrapperStyle={[styles.gridRow, { marginBottom: gap }]}
           contentContainerStyle={styles.gridContent}
           renderItem={({ item }) => (
-            <View style={[styles.gridItemWrap, { width: itemWidth, height: itemHeight }]}>
-              <GridItem item={item} />
-            </View>
+            <GridItem item={item} itemWidth={itemWidth} itemHeight={itemHeight} />
           )}
         />
       )}
@@ -145,96 +147,42 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.error,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    borderRadius: radii.button,
-  },
-  retryButtonText: {
-    ...typography.link,
-    color: colors.primary,
-  },
-  dnaWrap: {
-    marginBottom: spacing.lg,
-  },
-  dnaLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
+  header: {
+    ...typography.heading,
     marginBottom: spacing.sm,
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  dnaRow: {
     gap: spacing.sm,
+    paddingBottom: spacing.lg,
   },
-  chip: {
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.sm,
-  },
-  chipText: {
-    ...typography.caption,
-    color: colors.text,
-  },
-  emptyWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  emptyTitle: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  discoverLink: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-  },
-  discoverLinkText: {
-    ...typography.link,
-    color: colors.primary,
+  skeletonGrid: {
+    gap: spacing.md,
   },
   gridContent: {
     paddingBottom: spacing.xl,
   },
-  row: {
+  gridRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
   gridItemWrap: {
-    borderRadius: radii.md,
+    borderRadius: radii.card,
     overflow: 'hidden',
     backgroundColor: colors.surface,
-  },
-  gridItem: {
-    width: '100%',
-    height: '100%',
   },
   gridImage: {
     width: '100%',
     height: '100%',
+  },
+  removeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlayCharcoal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeText: {
+    ...typography.label,
+    color: colors.white,
   },
 });

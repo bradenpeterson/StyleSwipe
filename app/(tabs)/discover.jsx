@@ -1,33 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  Image,
-  ScrollView,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSwipeFeed } from '../../hooks/useSwipeFeed';
 import { SwipeCardStack } from '../../components/SwipeCardStack';
-import { openExternalUrl } from '../../lib/safeLinking';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { CARD_DIMENSIONS } from '../../components/SwipeCard';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
+import { colors, spacing, typography } from '../../constants/theme';
 
-/**
- * Discover screen — full-screen swipe feed (Phase 8).
- * Uses useSwipeFeed and SwipeCardStack; loading, error, and empty states.
- */
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const { fromOnboarding } = useLocalSearchParams();
   const { user } = useAuth();
-  const { queue, loading, error, submitSwipe, fetchMore, undoLastSwipe } = useSwipeFeed(user?.id, 20);
-  const [activeFilter, setActiveFilter] = useState(null);
-  const [swipeCount, setSwipeCount] = useState(0);
+  const { queue, loading, error, submitSwipe, fetchMore } = useSwipeFeed(user?.id, 20);
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
 
   useEffect(() => {
@@ -43,32 +30,17 @@ export default function DiscoverScreen() {
 
   const padding = {
     paddingTop: insets.top + spacing.lg,
-    paddingBottom: insets.bottom + spacing.xl,
-    paddingHorizontal: spacing.xl + Math.max(insets.left, insets.right),
+    paddingBottom: insets.bottom + spacing.sm,
+    paddingHorizontal: spacing.lg + Math.max(insets.left, insets.right),
   };
+  const cardVerticalOffset = CARD_DIMENSIONS.height * 0.07;
 
   const handleSwipe = async (itemId, direction) => {
     setShowOnboardingBanner(false);
-    setSwipeCount((prev) => prev + 1);
     await submitSwipe(itemId, direction);
   };
 
-  const handleOpenTopItem = async () => {
-    // Validate and guard external URLs before opening.
-    await openExternalUrl(topItem?.buy_url);
-  };
-
-  const FILTERS = ['All', 'tops', 'bottoms', 'shoes', 'outerwear', 'dresses', 'accessories'];
-
-  const filteredQueue = activeFilter
-    ? queue.filter(item => item.tags?.includes(activeFilter))
-    : queue;
-
-  const topItem = filteredQueue[0];
-
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <View style={[styles.container, padding]}>
@@ -81,84 +53,44 @@ export default function DiscoverScreen() {
           />
           <Text style={styles.title}>Discover</Text>
         </View>
-        <Text style={styles.counter}>{swipeCount}</Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersScroll}
-        contentContainerStyle={styles.filtersContent}
-      >
-        {FILTERS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[
-              styles.chip,
-              activeFilter === (f === 'All' ? null : f) && styles.chipActive,
-            ]}
-            onPress={() => setActiveFilter(f === 'All' ? null : f)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                activeFilter === (f === 'All' ? null : f) && styles.chipTextActive,
-              ]}
-            >
-              {f}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <View style={styles.stackWrap}>
-        {showOnboardingBanner && (
+      <View style={[styles.stackWrap, { transform: [{ translateY: cardVerticalOffset }] }]}>
+        {showOnboardingBanner ? (
           <View style={styles.onboardingBanner}>
             <Text style={styles.onboardingBannerText}>
-              Your style is taking shape — keep swiping to refine it.
+              Your style is taking shape - keep swiping to refine it.
             </Text>
           </View>
-        )}
+        ) : null}
+
         {loading && queue.length === 0 ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading...</Text>
+          <View style={styles.loadingWrap}>
+            <SkeletonLoader width={CARD_DIMENSIONS.width} height={CARD_DIMENSIONS.height} borderRadius={24} />
+            <SkeletonLoader width="50%" height={12} />
           </View>
         ) : error ? (
-          <View style={styles.centered}>
-            <Text style={styles.errorText}>Something went wrong</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => fetchMore(20)}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            emoji="!"
+            title="Something went wrong"
+            description="We couldn't load new inspiration cards."
+            actionLabel="Retry"
+            onAction={() => fetchMore(20)}
+          />
         ) : (
           <SwipeCardStack
-            items={filteredQueue}
+            items={queue}
             onSwipe={handleSwipe}
             renderEmpty={() => (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>No more inspiration for now</Text>
-              </View>
+              <EmptyState
+                emoji="📭"
+                title="No more inspiration for now"
+                description="Check back shortly for fresh looks."
+              />
             )}
           />
         )}
       </View>
-
-      {filteredQueue.length > 0 && (
-        <View style={styles.actionRow}>
-          <TouchableOpacity onPress={undoLastSwipe} style={styles.actionButton}>
-            <Ionicons name="arrow-undo" size={22} color={colors.text} />
-            <Text style={styles.actionLabel}>Undo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleOpenTopItem}
-            style={[styles.actionButton, !topItem?.buy_url && styles.actionButtonDisabled]}
-          >
-            <Ionicons name="bag-outline" size={22} color={colors.text} />
-            <Text style={styles.actionLabel}>Shop</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
@@ -167,143 +99,51 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    justifyContent: 'space-between',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    justifyContent: 'flex-start',
+    marginBottom: spacing.md,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-  },
-  logo: {
-    width: 32,
-    height: 32,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 28,
-    color: colors.text,
-  },
-  counter: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  filtersScroll: {
-    marginBottom: spacing.lg,
-    marginHorizontal: -spacing.xl,
-  },
-  filtersContent: {
-    paddingHorizontal: spacing.xl,
     gap: spacing.sm,
   },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+  logo: {
+    width: 30,
+    height: 30,
   },
-  chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    ...typography.label,
-    color: colors.text,
-    fontSize: 13,
-  },
-  chipTextActive: {
-    color: colors.primaryForeground,
+  title: {
+    ...typography.heading,
   },
   stackWrap: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 320,
+    justifyContent: 'flex-end',
     width: '100%',
+    paddingTop: spacing.sm,
   },
   onboardingBanner: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    left: spacing.sm,
+    right: spacing.sm,
     zIndex: 5,
+    alignItems: 'center',
   },
   onboardingBannerText: {
     ...typography.caption,
     color: colors.textSecondary,
-    backgroundColor: colors.surface,
-    borderRadius: radii.sm,
+    backgroundColor: colors.accentLight,
+    borderRadius: 100,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
+  loadingWrap: {
+    width: '100%',
     alignItems: 'center',
-    gap: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.error,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    borderRadius: radii.button,
-  },
-  retryButtonText: {
-    ...typography.link,
-    color: colors.primary,
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  emptyTitle: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  actionButton: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    minHeight: minTouchTarget,
-    minWidth: 60,
-  },
-  actionButtonDisabled: {
-    opacity: 0.4,
-  },
-  actionLabel: {
-    ...typography.caption,
-    color: colors.text,
-    fontSize: 12,
+    gap: spacing.md,
   },
 });

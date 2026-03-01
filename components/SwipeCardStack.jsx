@@ -1,11 +1,11 @@
 import React, { useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SwipeCard, CardContent, CARD_DIMENSIONS } from './SwipeCard';
-import { colors, typography } from '../constants/theme';
+import { colors, radii, spacing, typography } from '../constants/theme';
 
 const { width: CARD_WIDTH, height: CARD_HEIGHT } = CARD_DIMENSIONS;
 
-const SwipeCardStackComponent = forwardRef(({ items, onSwipe, renderEmpty, onPressLike, onPressSkip }, ref) => {
+const SwipeCardStackComponent = forwardRef(({ items, onSwipe, renderEmpty }, ref) => {
   const topCardRef = useRef(null);
 
   const visible = items.slice(0, 3);
@@ -47,29 +47,25 @@ const SwipeCardStackComponent = forwardRef(({ items, onSwipe, renderEmpty, onPre
 
   return (
     <View style={styles.container}>
-      {/* Back cards - full content (image + tags) so next card is visible and consistent when it becomes top */}
       {displayRest.map((item, index) => (
         <View
           key={`back-${index}-${item.id}`}
-          style={[styles.backCard, { zIndex: 2 - index }]}
+          style={[
+            styles.backCard,
+            {
+              top: 0,
+              // Keep back cards at full size so promoted cards don't visually "grow" on activation.
+              transform: [{ scale: 1 }],
+              zIndex: 2 - index,
+            },
+          ]}
         >
-          {item?.image_url ? (
-            <CardContent item={item} />
-          ) : (
-            <View style={styles.cardPlaceholder} />
-          )}
+          {item?.image_url ? <CardContent item={item} /> : <View style={styles.cardPlaceholder} />}
         </View>
       ))}
-      {/* Top card (interactive) - same instance animates off, then onSwipe fires on completion */}
       {topItem ? (
         <View style={styles.topCard}>
-          <SwipeCard
-            ref={topCardRef}
-            key={topItem.id}
-            item={topItem}
-            onSwipe={handleSwipeFromCard}
-            enabled={true}
-          />
+          <SwipeCard ref={topCardRef} key={topItem.id} item={topItem} onSwipe={handleSwipeFromCard} enabled />
         </View>
       ) : null}
     </View>
@@ -81,28 +77,28 @@ export const SwipeCardStack = SwipeCardStackComponent;
 const styles = StyleSheet.create({
   container: {
     width: CARD_WIDTH,
-    height: CARD_HEIGHT + 40,
+    height: CARD_HEIGHT + spacing.xl,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   topCard: {
     position: 'absolute',
     zIndex: 3,
+    top: 0,
   },
   backCard: {
     position: 'absolute',
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    top: 0,
-    borderRadius: 12,
+    borderRadius: radii.cardLarge,
     overflow: 'hidden',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surface,
   },
   cardPlaceholder: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
-    backgroundColor: '#e8e8e8',
+    borderRadius: radii.cardLarge,
+    backgroundColor: colors.surface,
   },
   empty: {
     width: CARD_WIDTH,
@@ -110,7 +106,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radii.cardLarge,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   emptyText: {
     ...typography.body,

@@ -2,19 +2,19 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
   ScrollView,
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { colors, spacing, typography } from '../../constants/theme';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -57,8 +57,8 @@ export default function LoginScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: insets.top + spacing.xl,
-            paddingBottom: insets.bottom + spacing.xl,
+            paddingTop: insets.top + spacing.xxxl,
+            paddingBottom: insets.bottom + spacing.xxl,
             paddingLeft: spacing.xl + insets.left,
             paddingRight: spacing.xl + insets.right,
           },
@@ -73,79 +73,53 @@ export default function LoginScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
+            <Text style={styles.title}>StyleSwipe</Text>
+            <Text style={styles.tagline}>Discover your style</Text>
           </View>
 
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>
-            Sign in to continue with StyleSwipe
-          </Text>
+          <View style={styles.inputGroup}>
+            <Input
+              label="Email"
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                setError(null);
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              editable={!loading}
+              accessibilityLabel="Email address"
+            />
 
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="you@example.com"
-            placeholderTextColor={colors.textMuted}
-            value={email}
-            onChangeText={(t) => {
-              setEmail(t);
-              setError(null);
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            editable={!loading}
-            accessibilityLabel="Email address"
-          />
+            <Input
+              label="Password"
+              placeholder="Your password"
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                setError(null);
+              }}
+              secureTextEntry
+              autoComplete="password"
+              editable={!loading}
+              accessibilityLabel="Password"
+              error={error}
+            />
+          </View>
 
-          <Text style={[styles.label, styles.labelSpaced]}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Your password"
-            placeholderTextColor={colors.textMuted}
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              setError(null);
-            }}
-            secureTextEntry
-            autoComplete="password"
-            editable={!loading}
-            accessibilityLabel="Password"
-          />
-
-          {error ? (
-            <View style={styles.errorWrap}>
-              <Text style={styles.error}>{error}</Text>
-            </View>
-          ) : null}
-
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Log in"
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.primaryForeground} />
-            ) : (
-              <Text style={styles.buttonText}>Log in</Text>
-            )}
-          </TouchableOpacity>
+          <Button label="Log in" onPress={handleSubmit} loading={loading} style={styles.cta} />
 
           <TouchableOpacity
             style={styles.linkWrap}
             onPress={() => router.replace('/sign-up')}
             disabled={loading}
-            activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Don't have an account? Sign up"
           >
-            <Text style={styles.linkText}>
-              Don't have an account? Sign up
-            </Text>
+            <Text style={styles.linkText}>Don't have an account? Sign up</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -160,85 +134,44 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
   form: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
     alignSelf: 'center',
+    gap: spacing.xl,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: spacing.xxl,
+    paddingTop: spacing.xl,
+    gap: spacing.md,
   },
   logo: {
-    width: 125,
-    height: 125,
+    width: 96,
+    height: 96,
   },
   title: {
-    ...typography.title,
-    color: colors.text,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
+    ...typography.display,
+    color: colors.textPrimary,
   },
-  subtitle: {
-    ...typography.subtitle,
-    color: colors.textSecondary,
-    marginBottom: spacing.xxl,
-    textAlign: 'center',
-  },
-  label: {
-    ...typography.label,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  labelSpaced: {
-    marginTop: spacing.lg,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    fontSize: 16,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    minHeight: minTouchTarget,
-  },
-  errorWrap: {
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  error: {
+  tagline: {
     ...typography.caption,
-    color: colors.error,
+    color: colors.textSecondary,
   },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.lg,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing.xl,
+  inputGroup: {
+    gap: spacing.lg,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
+  cta: {
+    marginTop: spacing.sm,
   },
   linkWrap: {
-    marginTop: spacing.xl,
-    paddingVertical: spacing.md,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   linkText: {
-    ...typography.link,
+    ...typography.body,
     color: colors.textSecondary,
   },
 });

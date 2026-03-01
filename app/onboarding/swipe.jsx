@@ -1,16 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { SwipeCardStack } from '../../components/SwipeCardStack';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { CARD_DIMENSIONS } from '../../components/SwipeCard';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
+import { colors, radii, spacing, typography } from '../../constants/theme';
 import {
   fetchOnboardingCards,
   markOnboardingComplete,
@@ -57,7 +55,6 @@ export default function OnboardingSwipeScreen() {
   const handleSwipe = async (itemId, direction) => {
     if (!user?.id || completing) return;
 
-    // The instruction tooltip is one-time and disappears on first action.
     setShowTooltip(false);
 
     try {
@@ -108,81 +105,77 @@ export default function OnboardingSwipeScreen() {
   const padding = {
     paddingTop: insets.top + spacing.lg,
     paddingBottom: insets.bottom + spacing.xl,
-    paddingHorizontal: spacing.xl + Math.max(insets.left, insets.right),
+    paddingHorizontal: spacing.lg + Math.max(insets.left, insets.right),
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <View style={[styles.container, padding]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Discover your style</Text>
-        <Text style={styles.subtitle}>
-          Swipe a few looks so we can personalize your feed.
-        </Text>
-        <Text style={styles.progress}>
-          {Math.min(swipedCount, totalCount)} of {totalCount}
-        </Text>
+        <View style={styles.progressRow}>
+          {Array.from({ length: totalCount }).map((_, index) => {
+            const completed = index < swipedCount;
+            return <View key={`progress-pill-${index}`} style={[styles.progressPill, completed && styles.progressPillFilled]} />;
+          })}
+        </View>
       </View>
 
       <View style={styles.stackWrap}>
         {loading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading...</Text>
+          <View style={styles.loadingWrap}>
+            <SkeletonLoader
+              width={CARD_DIMENSIONS.width}
+              height={CARD_DIMENSIONS.height}
+              borderRadius={radii.cardLarge}
+            />
           </View>
         ) : error ? (
-          <View style={styles.centered}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadCards}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            emoji="!"
+            title="Couldn't load setup cards"
+            description={error}
+            actionLabel="Retry"
+            onAction={loadCards}
+          />
         ) : cards.length === 0 ? (
-          <View style={styles.centered}>
-            <Text style={styles.loadingText}>No onboarding cards available.</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={handleSkip}>
-              <Text style={styles.retryButtonText}>Continue</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            emoji="✨"
+            title="Setup complete"
+            description="Taking you to Discover."
+            actionLabel="Continue"
+            onAction={handleSkip}
+          />
         ) : (
           <View style={styles.stackArea}>
             <SwipeCardStack
               items={cards}
               onSwipe={handleSwipe}
-              renderEmpty={() => (
-                <View style={styles.emptyWrap}>
-                  <Text style={styles.emptyTitle}>All done swiping!</Text>
-                </View>
-              )}
+              renderEmpty={() => <View style={styles.stackPlaceholder} />}
             />
 
-            {showTooltip && (
+            {showTooltip ? (
               <View style={styles.tooltip}>
-                <Text style={styles.tooltipText}>
-                  Swipe right if you love it, left to skip it.
-                </Text>
-                <TouchableOpacity onPress={() => setShowTooltip(false)} activeOpacity={0.8}>
-                  <Text style={styles.tooltipDismiss}>Got it</Text>
-                </TouchableOpacity>
+                <Ionicons name="arrow-back" size={16} color={colors.textPrimary} />
+                <Text style={styles.tooltipText}>swipe to react</Text>
+                <Ionicons name="arrow-forward" size={16} color={colors.textPrimary} />
               </View>
-            )}
+            ) : null}
           </View>
         )}
       </View>
 
-      <TouchableOpacity
-        style={styles.skipButton}
-        onPress={handleSkip}
-        disabled={completing}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel="Skip setup"
-      >
-        <Text style={styles.skipButtonText}>Skip setup</Text>
-      </TouchableOpacity>
+      <View style={styles.footer}>
+        <TouchableOpacity
+          onPress={handleSkip}
+          disabled={completing}
+          accessibilityRole="button"
+          accessibilityLabel="Skip setup"
+          style={styles.skipButton}
+        >
+          <Text style={styles.skipButtonText}>Skip setup</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -191,102 +184,71 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    justifyContent: 'space-between',
   },
   header: {
-    marginBottom: spacing.xl,
+    minHeight: 32,
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
-  title: {
-    ...typography.title,
-    color: colors.text,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
+  progressRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
-  subtitle: {
-    ...typography.subtitle,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
+  progressPill: {
+    flex: 1,
+    height: 6,
+    borderRadius: radii.pill,
+    backgroundColor: colors.border,
   },
-  progress: {
-    ...typography.label,
-    color: colors.textSecondary,
-    textAlign: 'center',
+  progressPillFilled: {
+    backgroundColor: colors.accent,
   },
   stackWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 320,
+    paddingVertical: spacing.sm,
+  },
+  loadingWrap: {
+    width: '100%',
+    alignItems: 'center',
   },
   stackArea: {
     position: 'relative',
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.error,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  retryButtonText: {
-    ...typography.link,
-    color: colors.primary,
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  emptyTitle: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.text,
+  stackPlaceholder: {
+    minHeight: 320,
   },
   tooltip: {
     position: 'absolute',
-    top: spacing.md,
-    left: spacing.md,
-    right: spacing.md,
-    backgroundColor: '#111111ee',
-    borderRadius: radii.md,
-    padding: spacing.md,
+    bottom: spacing.xxxl,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tooltipText: {
     ...typography.caption,
-    color: colors.primaryForeground,
-    textAlign: 'center',
+    color: colors.textPrimary,
   },
-  tooltipDismiss: {
-    ...typography.link,
-    color: colors.primaryForeground,
-    textAlign: 'center',
+  footer: {
+    alignItems: 'center',
+    minHeight: 52,
+    justifyContent: 'center',
   },
   skipButton: {
-    borderRadius: radii.button,
-    paddingVertical: spacing.md,
-    minHeight: minTouchTarget,
+    minHeight: 44,
     justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: spacing.md,
   },
   skipButtonText: {
-    ...typography.link,
+    ...typography.caption,
     color: colors.textSecondary,
   },
 });

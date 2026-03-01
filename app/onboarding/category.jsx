@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { PickerTile } from '../../components/onboarding/PickerTile';
+import { Button } from '../../components/ui/Button';
 import { supabase } from '../../lib/supabase';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 
 const CATEGORY_OPTIONS = ['Shirts', 'Pants', 'Dresses', 'Shoes', 'Accessories', 'Outerwear', 'Skirts', 'Shorts'];
 
@@ -59,11 +60,9 @@ export default function CategoryPickerScreen() {
         },
       ]}
     >
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
-        <Text style={styles.title}>What do you like to shop for?</Text>
-        <Text style={styles.subtitle}>
-          Select your favorite categories. You can customize this later.
-        </Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>What do you shop for most?</Text>
+        <Text style={styles.subtitle}>Select your favorite categories.</Text>
 
         <View style={styles.grid}>
           {CATEGORY_OPTIONS.map((category) => (
@@ -78,21 +77,8 @@ export default function CategoryPickerScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        {error && <Text style={styles.error}>{error}</Text>}
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleComplete}
-          disabled={loading || selected.size === 0}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Complete"
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.primaryForeground} size="small" />
-          ) : (
-            <Text style={styles.buttonText}>Complete</Text>
-          )}
-        </TouchableOpacity>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Button label="Complete" onPress={handleComplete} loading={loading} disabled={loading || selected.size === 0} />
       </View>
     </View>
   );
@@ -104,49 +90,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'space-between',
   },
-  scrollView: {
-    flex: 1,
+  content: {
+    paddingTop: spacing.xl,
   },
   title: {
-    ...typography.title,
-    color: colors.text,
-    marginBottom: spacing.md,
+    ...typography.heading,
     textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    ...typography.subtitle,
+    ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.xl,
     textAlign: 'center',
+    marginBottom: spacing.xl,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: spacing.xl,
   },
   footer: {
     gap: spacing.md,
   },
   error: {
     ...typography.caption,
-    color: colors.error,
+    color: colors.destructive,
     textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.lg,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
   },
 });

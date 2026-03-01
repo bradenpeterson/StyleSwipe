@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PickerTile } from '../../components/onboarding/PickerTile';
+import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../contexts/AuthContext';
 import { saveOnboardingAgeRange } from '../../features/onboarding/onboardingProfileService';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 
 const AGE_OPTIONS = ['18-24', '25-34', '35-44', '45-54', '55+'];
 
@@ -17,16 +18,11 @@ export default function AgeScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleSelectAge = (age) => {
-    setSelected(age);
-  };
-
   const handleNext = async () => {
     if (!selected || !user?.id) return;
     setError(null);
     setLoading(true);
     try {
-      // Keep onboarding persistence in a single domain service to avoid drift.
       await saveOnboardingAgeRange(user.id, selected);
       router.push('/onboarding/style-goal');
     } catch (err) {
@@ -47,40 +43,20 @@ export default function AgeScreen() {
         },
       ]}
     >
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.title}>What's your age range?</Text>
-        <Text style={styles.subtitle}>
-          We use this to tailor your recommendations.
-        </Text>
+        <Text style={styles.subtitle}>We use this to tailor your recommendations.</Text>
 
         <View style={styles.grid}>
           {AGE_OPTIONS.map((age) => (
-            <PickerTile
-              key={age}
-              label={age}
-              selected={selected === age}
-              onPress={() => handleSelectAge(age)}
-            />
+            <PickerTile key={age} label={age} selected={selected === age} onPress={() => setSelected(age)} />
           ))}
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <TouchableOpacity
-          style={[styles.button, (!selected || loading) && styles.buttonDisabled]}
-          onPress={handleNext}
-          disabled={!selected || loading}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Next"
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <Text style={styles.buttonText}>Next</Text>
-          )}
-        </TouchableOpacity>
+        <Button label="Next" onPress={handleNext} loading={loading} disabled={!selected || loading} />
       </View>
     </View>
   );
@@ -92,48 +68,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'space-between',
   },
-  scrollView: {
-    flex: 1,
+  content: {
+    paddingTop: spacing.xl,
   },
   title: {
-    ...typography.title,
-    color: colors.text,
-    marginBottom: spacing.md,
+    ...typography.heading,
     textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    ...typography.subtitle,
+    ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.xl,
     textAlign: 'center',
+    marginBottom: spacing.xl,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: spacing.xl,
   },
   footer: {
     gap: spacing.md,
   },
   error: {
     ...typography.caption,
-    color: colors.error,
+    color: colors.destructive,
     textAlign: 'center',
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.lg,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
   },
 });

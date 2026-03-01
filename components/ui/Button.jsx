@@ -1,55 +1,116 @@
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { useMemo, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, minTouchTarget, radii, spacing, typography } from '../../constants/theme';
+import { SkeletonLoader } from './SkeletonLoader';
 
-/**
- * Primary action button. Used throughout the app for CTAs.
- *
- * @param {{ label: string, onPress: () => void, loading?: boolean, disabled?: boolean, variant?: 'primary' | 'ghost' }} props
- */
-export function Button({ label, onPress, loading = false, disabled = false, variant = 'primary' }) {
-  const isPrimary = variant === 'primary';
+export function Button({
+  label,
+  onPress,
+  loading = false,
+  disabled = false,
+  variant = 'primary',
+  fullWidth = true,
+  style,
+  textStyle,
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const palette = useMemo(() => {
+    if (variant === 'secondary') {
+      return {
+        backgroundColor: colors.accentLight,
+        borderColor: colors.accent,
+        textColor: colors.accent,
+      };
+    }
+    if (variant === 'ghost') {
+      return {
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        textColor: colors.textSecondary,
+      };
+    }
+    if (variant === 'destructive') {
+      return {
+        backgroundColor: colors.destructive,
+        borderColor: colors.destructive,
+        textColor: colors.white,
+      };
+    }
+    return {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+      textColor: colors.white,
+    };
+  }, [variant]);
+
+  const animateTo = (value) => {
+    Animated.timing(scale, {
+      toValue: value,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  };
 
   return (
-    <TouchableOpacity
-      style={[styles.base, isPrimary ? styles.primary : styles.ghost]}
-      onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.8}
-      accessibilityRole="button"
-      accessibilityLabel={label}
+    <Animated.View
+      style={[
+        fullWidth && styles.fullWidth,
+        {
+          transform: [{ scale }],
+        },
+      ]}
     >
-      {loading ? (
-        <ActivityIndicator size="small" color={isPrimary ? colors.primaryForeground : colors.textSecondary} />
-      ) : (
-        <Text style={[styles.label, isPrimary ? styles.labelPrimary : styles.labelGhost]}>
-          {label}
-        </Text>
-      )}
-    </TouchableOpacity>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => animateTo(0.97)}
+        onPressOut={() => animateTo(1)}
+        disabled={disabled || loading}
+        style={[
+          styles.base,
+          {
+            backgroundColor: palette.backgroundColor,
+            borderColor: palette.borderColor,
+          },
+          disabled && styles.disabled,
+          style,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+      >
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <SkeletonLoader width={64} height={12} borderRadius={radii.pill} />
+          </View>
+        ) : (
+          <Text style={[styles.label, { color: palette.textColor }, textStyle]}>{label}</Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  fullWidth: {
+    width: '100%',
+  },
   base: {
-    borderRadius: radii.button,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
+    minHeight: 56,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
   },
-  primary: {
-    backgroundColor: colors.primary,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
+  disabled: {
+    opacity: 0.55,
   },
   label: {
-    ...typography.button,
+    ...typography.label,
   },
-  labelPrimary: {
-    color: colors.primaryForeground,
-  },
-  labelGhost: {
-    color: colors.textSecondary,
+  loadingWrap: {
+    height: minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

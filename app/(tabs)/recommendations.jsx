@@ -3,8 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
   FlatList,
   Image,
   useWindowDimensions,
@@ -14,29 +12,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRecommendations } from '../../hooks/useRecommendations';
 import { openExternalUrl } from '../../lib/safeLinking';
-import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
+import { colors, radii, spacing, typography } from '../../constants/theme';
 
 const NUM_COLUMNS = 2;
-const IMAGE_ASPECT = 5 / 4; // height : width = 5 : 4
 
 function ProductCard({ product, itemWidth, onBuyNow }) {
-  const imageHeight = itemWidth * IMAGE_ASPECT;
   if (!product) return null;
+
+  const imageHeight = itemWidth * 1.2;
   const raw = product.price;
   const priceDisplay =
     raw != null && raw !== ''
-      ? typeof raw === 'string' && (raw.startsWith('$') || isNaN(Number(raw)))
+      ? typeof raw === 'string' && (raw.startsWith('$') || Number.isNaN(Number(raw)))
         ? raw
         : `$${Number(raw).toFixed(2)}`
-      : '—';
+      : '-';
 
   return (
-    <View style={[styles.card, { width: itemWidth }]}>
-      <Image
-        source={{ uri: product.image_url }}
-        style={[styles.cardImage, { height: imageHeight }]}
-        resizeMode="cover"
-      />
+    <Card style={[styles.card, { width: itemWidth }]} elevated>
+      <Image source={{ uri: product.image_url }} style={[styles.cardImage, { height: imageHeight }]} resizeMode="cover" />
       <View style={styles.cardInfo}>
         {product.brand ? (
           <Text style={styles.brand} numberOfLines={1}>
@@ -47,17 +45,9 @@ function ProductCard({ product, itemWidth, onBuyNow }) {
           {product.title ?? ''}
         </Text>
         <Text style={styles.price}>{priceDisplay}</Text>
-        <TouchableOpacity
-          style={styles.buyButton}
-          onPress={() => onBuyNow(product)}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Buy Now"
-        >
-          <Text style={styles.buyButtonText}>Buy Now</Text>
-        </TouchableOpacity>
+        <Button label="Shop Now" onPress={() => onBuyNow(product)} style={styles.buyButton} />
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -68,8 +58,8 @@ export default function RecommendationsScreen() {
   const { items, loading, error, refetch } = useRecommendations(user?.id, 20);
   const [refreshing, setRefreshing] = useState(false);
 
-  const horizontalPadding = spacing.xl + Math.max(insets.left, insets.right);
-  const gap = spacing.sm;
+  const horizontalPadding = spacing.lg + Math.max(insets.left, insets.right);
+  const gap = spacing.md;
   const contentWidth = windowWidth - horizontalPadding * 2;
   const itemWidth = (contentWidth - gap) / NUM_COLUMNS;
 
@@ -80,7 +70,6 @@ export default function RecommendationsScreen() {
   };
 
   const handleBuyNow = async (product) => {
-    // Validate and guard external URLs before opening.
     await openExternalUrl(product?.buy_url);
   };
 
@@ -89,21 +78,22 @@ export default function RecommendationsScreen() {
     try {
       await refetch();
     } finally {
-      // Always reset pull-to-refresh spinner even on errors.
       setRefreshing(false);
     }
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   if (loading && items.length === 0) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={styles.loadingGrid}>
+          <SkeletonLoader width="55%" height={24} borderRadius={radii.pill} />
+          <SkeletonLoader width="40%" height={12} />
+          <View style={styles.row}>
+            <SkeletonLoader width="48%" height={260} borderRadius={radii.card} />
+            <SkeletonLoader width="48%" height={260} borderRadius={radii.card} />
+          </View>
         </View>
       </View>
     );
@@ -112,12 +102,13 @@ export default function RecommendationsScreen() {
   if (error) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>Something went wrong</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          emoji="!"
+          title="Couldn't load picks"
+          description="Try again in a moment."
+          actionLabel="Retry"
+          onAction={refetch}
+        />
       </View>
     );
   }
@@ -125,15 +116,22 @@ export default function RecommendationsScreen() {
   if (items.length === 0) {
     return (
       <View style={[styles.container, padding]}>
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>Swipe more to get recommendations</Text>
-        </View>
+        <Text style={styles.heading}>For You</Text>
+        <Text style={styles.caption}>Picked for your style</Text>
+        <EmptyState
+          emoji="🛍️"
+          title="Nothing to show yet"
+          description="Swipe in Discover to unlock recommendations."
+        />
       </View>
     );
   }
 
   return (
     <View style={[styles.container, padding]}>
+      <Text style={styles.heading}>For You</Text>
+      <Text style={styles.caption}>Picked for your style</Text>
+
       <FlatList
         data={items}
         numColumns={NUM_COLUMNS}
@@ -141,7 +139,7 @@ export default function RecommendationsScreen() {
         columnWrapperStyle={[styles.row, { marginBottom: gap }]}
         contentContainerStyle={styles.gridContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
         renderItem={({ item }) => (
           <ProductCard product={item} itemWidth={itemWidth} onBuyNow={handleBuyNow} />
@@ -156,87 +154,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.lg,
+  heading: {
+    ...typography.heading,
+    marginBottom: spacing.xs,
   },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
+  caption: {
+    ...typography.caption,
+    marginBottom: spacing.lg,
   },
-  errorText: {
-    ...typography.body,
-    color: colors.error,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    borderRadius: radii.button,
-  },
-  retryButtonText: {
-    ...typography.link,
-    color: colors.primary,
-  },
-  emptyWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  emptyTitle: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.text,
-    textAlign: 'center',
+  loadingGrid: {
+    gap: spacing.sm,
   },
   gridContent: {
     paddingBottom: spacing.xl,
   },
   row: {
-    gap: spacing.sm,
+    flexDirection: 'row',
+    gap: spacing.md,
   },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    overflow: 'hidden',
+    borderRadius: radii.card,
   },
   cardImage: {
     width: '100%',
-    backgroundColor: colors.border,
+    backgroundColor: colors.surface,
   },
   cardInfo: {
-    padding: spacing.sm,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
   brand: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-  },
-  cardTitle: {
-    ...typography.caption,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  price: {
     ...typography.label,
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
+  },
+  cardTitle: {
+    ...typography.subheading,
+  },
+  price: {
+    ...typography.body,
+    color: colors.accent,
   },
   buyButton: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.button,
-    paddingVertical: spacing.sm,
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buyButtonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
+    marginTop: spacing.sm,
   },
 });

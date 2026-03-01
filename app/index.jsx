@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { colors, spacing } from '../constants/theme';
+import { SkeletonLoader } from '../components/ui/SkeletonLoader';
 
 export default function IndexScreen() {
   const { user, loading } = useAuth();
@@ -28,7 +30,6 @@ export default function IndexScreen() {
       if (cancelled) return;
 
       if (error) {
-        // Safe fallback: send user through onboarding if profile lookup fails.
         router.replace('/onboarding');
       } else if (data?.has_onboarded) {
         router.replace('/(tabs)/discover');
@@ -48,7 +49,8 @@ export default function IndexScreen() {
   if (loading || checkingOnboarding) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0a0a0a" />
+        <SkeletonLoader width={160} height={12} />
+        <SkeletonLoader width={92} height={12} />
       </View>
     );
   }
@@ -60,6 +62,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    gap: spacing.md,
+    backgroundColor: colors.background,
   },
 });
