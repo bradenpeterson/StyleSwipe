@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,22 +9,100 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
-import { useSwipeFeed } from '../../hooks/useSwipeFeed';
 import { SwipeCardStack } from '../../components/SwipeCardStack';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
+import {
+  fetchOnboardingCards,
+  markOnboardingComplete,
+  submitOnboardingSwipe,
+} from '../../features/onboarding/onboardingSwipeService';
 
 export default function OnboardingSwipeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { queue, loading, error, submitSwipe, fetchMore } = useSwipeFeed(user?.id, 20);
+  const [cards, setCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [swipedCount, setSwipedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(8);
+  const [completing, setCompleting] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(true);
 
-  const handleSwipe = async (itemId, direction) => {
-    await submitSwipe(itemId, direction);
+  const navigateToDiscover = () => {
+    router.replace('/(tabs)/discover?fromOnboarding=1');
   };
 
-  const handleDone = () => {
-    router.replace('/onboarding/done');
+  const loadCards = async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchOnboardingCards({ limit: 8 });
+      setCards(result);
+      setSwipedCount(0);
+      setTotalCount(result.length || 8);
+    } catch (err) {
+      setError(err?.message ?? 'Failed to load onboarding cards');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.id) return;
+    loadCards();
+  }, [user?.id]);
+
+  const handleSwipe = async (itemId, direction) => {
+    if (!user?.id || completing) return;
+
+    // The instruction tooltip is one-time and disappears on first action.
+    setShowTooltip(false);
+
+    try {
+      await submitOnboardingSwipe({
+        userId: user.id,
+        itemId,
+        direction,
+      });
+    } catch (err) {
+      setError(err?.message ?? 'Failed to save swipe');
+      return;
+    }
+
+    let nextSwipedCount = swipedCount + 1;
+    setCards((prev) => prev.filter((card) => card.id !== itemId));
+    setSwipedCount((prev) => {
+      nextSwipedCount = prev + 1;
+      return nextSwipedCount;
+    });
+
+    if (nextSwipedCount >= totalCount) {
+      setCompleting(true);
+      try {
+        await markOnboardingComplete(user.id);
+        navigateToDiscover();
+      } catch (err) {
+        setError(err?.message ?? 'Failed to complete onboarding');
+      } finally {
+        setCompleting(false);
+      }
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!user?.id || completing) return;
+    setCompleting(true);
+    setError(null);
+    try {
+      await markOnboardingComplete(user.id);
+      navigateToDiscover();
+    } catch (err) {
+      setError(err?.message ?? 'Failed to skip setup');
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const padding = {
@@ -42,45 +120,68 @@ export default function OnboardingSwipeScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Discover your style</Text>
         <Text style={styles.subtitle}>
-          Swipe on looks you love. We'll learn your taste.
+          Swipe a few looks so we can personalize your feed.
+        </Text>
+        <Text style={styles.progress}>
+          {Math.min(swipedCount, totalCount)} of {totalCount}
         </Text>
       </View>
 
       <View style={styles.stackWrap}>
-        {loading && queue.length === 0 ? (
+        {loading ? (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         ) : error ? (
           <View style={styles.centered}>
-            <Text style={styles.errorText}>{error.message}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => fetchMore(20)}>
-              {/* Retry should actually re-request feed data after transient failures. */}
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadCards}>
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
+        ) : cards.length === 0 ? (
+          <View style={styles.centered}>
+            <Text style={styles.loadingText}>No onboarding cards available.</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={handleSkip}>
+              <Text style={styles.retryButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
-          <SwipeCardStack
-            items={queue}
-            onSwipe={handleSwipe}
-            renderEmpty={() => (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>All done swiping!</Text>
+          <View style={styles.stackArea}>
+            <SwipeCardStack
+              items={cards}
+              onSwipe={handleSwipe}
+              renderEmpty={() => (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyTitle}>All done swiping!</Text>
+                </View>
+              )}
+            />
+
+            {showTooltip && (
+              <View style={styles.tooltip}>
+                <Text style={styles.tooltipText}>
+                  Swipe right if you love it, left to skip it.
+                </Text>
+                <TouchableOpacity onPress={() => setShowTooltip(false)} activeOpacity={0.8}>
+                  <Text style={styles.tooltipDismiss}>Got it</Text>
+                </TouchableOpacity>
               </View>
             )}
-          />
+          </View>
         )}
       </View>
 
       <TouchableOpacity
-        style={styles.doneButton}
-        onPress={handleDone}
+        style={styles.skipButton}
+        onPress={handleSkip}
+        disabled={completing}
         activeOpacity={0.8}
         accessibilityRole="button"
-        accessibilityLabel="Done"
+        accessibilityLabel="Skip setup"
       >
-        <Text style={styles.doneButtonText}>Done</Text>
+        <Text style={styles.skipButtonText}>Skip setup</Text>
       </TouchableOpacity>
     </View>
   );
@@ -105,12 +206,21 @@ const styles = StyleSheet.create({
     ...typography.subtitle,
     color: colors.textSecondary,
     textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  progress: {
+    ...typography.label,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   stackWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 320,
+  },
+  stackArea: {
+    position: 'relative',
   },
   centered: {
     flex: 1,
@@ -148,16 +258,35 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.text,
   },
-  doneButton: {
-    backgroundColor: colors.primary,
+  tooltip: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    backgroundColor: '#111111ee',
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  tooltipText: {
+    ...typography.caption,
+    color: colors.primaryForeground,
+    textAlign: 'center',
+  },
+  tooltipDismiss: {
+    ...typography.link,
+    color: colors.primaryForeground,
+    textAlign: 'center',
+  },
+  skipButton: {
     borderRadius: radii.button,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     minHeight: minTouchTarget,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  doneButtonText: {
-    ...typography.button,
-    color: colors.primaryForeground,
+  skipButtonText: {
+    ...typography.link,
+    color: colors.textSecondary,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSwipeFeed } from '../../hooks/useSwipeFeed';
 import { SwipeCardStack } from '../../components/SwipeCardStack';
@@ -22,10 +23,23 @@ import { spacing, colors, typography, radii, minTouchTarget } from '../../consta
  */
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
+  const { fromOnboarding } = useLocalSearchParams();
   const { user } = useAuth();
   const { queue, loading, error, submitSwipe, fetchMore, undoLastSwipe } = useSwipeFeed(user?.id, 20);
   const [activeFilter, setActiveFilter] = useState(null);
   const [swipeCount, setSwipeCount] = useState(0);
+  const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
+
+  useEffect(() => {
+    if (fromOnboarding === '1') {
+      setShowOnboardingBanner(true);
+      const timeout = setTimeout(() => {
+        setShowOnboardingBanner(false);
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+    return undefined;
+  }, [fromOnboarding]);
 
   const padding = {
     paddingTop: insets.top + spacing.lg,
@@ -34,6 +48,7 @@ export default function DiscoverScreen() {
   };
 
   const handleSwipe = async (itemId, direction) => {
+    setShowOnboardingBanner(false);
     setSwipeCount((prev) => prev + 1);
     await submitSwipe(itemId, direction);
   };
@@ -97,6 +112,13 @@ export default function DiscoverScreen() {
       </ScrollView>
 
       <View style={styles.stackWrap}>
+        {showOnboardingBanner && (
+          <View style={styles.onboardingBanner}>
+            <Text style={styles.onboardingBannerText}>
+              Your style is taking shape — keep swiping to refine it.
+            </Text>
+          </View>
+        )}
         {loading && queue.length === 0 ? (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -205,6 +227,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 320,
+    width: '100%',
+  },
+  onboardingBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  onboardingBannerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    backgroundColor: colors.surface,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
   centered: {
     flex: 1,

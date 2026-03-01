@@ -1,60 +1,31 @@
 // supabase/functions/swipe-feed/index.ts
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
-import { corsHeaders } from "../_shared/cors.ts";
+import { requireAuthorizedUser, requireBearerToken } from "../_shared/auth.ts";
+import { handleCorsPreflight, handleFunctionError, jsonResponse, parseLimit } from "../_shared/http.ts";
+import { createAdminClient } from "../_shared/supabaseAdmin.ts";
 import { MOCK_ITEMS } from "./mockInspiration.ts";
 
-const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
-
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  const corsResponse = handleCorsPreflight(req);
+  if (corsResponse) {
+    return corsResponse;
   }
 
   try {
     // 1. Validate JWT
     const url = new URL(req.url);
     const userId = url.searchParams.get("user_id");
-    const limit = Math.min(
-      Math.max(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 1),
-      50
-    );
+    const limit = parseLimit(url);
 
     if (!userId) {
-      return new Response(
-        JSON.stringify({ message: "Missing user_id query param" }),
-        { status: 400, headers: jsonHeaders }
-      );
+      return jsonResponse({ message: "Missing user_id query param" }, 400);
     }
 
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
-      return new Response(
-        // Enforce strict Bearer format to avoid treating malformed headers as JWTs.
-        JSON.stringify({ message: "Missing or invalid authorization header" }),
-        { status: 401, headers: jsonHeaders }
-      );
-    }
-
-    const jwt = authHeader.slice(7).trim();
+    const jwt = requireBearerToken(req);
 
     // 2. Initialize Supabase client with service role
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Verify JWT and ensure user_id matches
-    const {
-      data: { user },
-      error: jwtError,
-    } = await supabase.auth.getUser(jwt);
-    if (jwtError || !user || user.id !== userId) {
-      return new Response(JSON.stringify({ message: "Unauthorized" }), {
-        status: 403,
-        headers: jsonHeaders,
-      });
-    }
+    const supabase = createAdminClient();
+    await requireAuthorizedUser(supabase, jwt, userId);
 
     // 3. Load profile (tag_scores)
     const { data: profile } = await supabase
@@ -112,20 +83,10 @@ Deno.serve(async (req: Request) => {
       source: item.source,
     }));
 
-    return new Response(JSON.stringify({ items: result }), {
-      headers: jsonHeaders,
-    });
+    return jsonResponse({ items: result });
   } catch (error) {
     console.error("swipe-feed error:", error);
-    const message =
-      error instanceof Error ? error.message : String(error);
-    return new Response(
-      JSON.stringify({ message, code: "FEED_ERROR" }),
-      {
-        status: 500,
-        headers: jsonHeaders,
-      }
-    );
+    return handleFunctionError(error, "FEED_ERROR");
   }
 });
 

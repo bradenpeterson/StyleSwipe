@@ -4,16 +4,10 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PickerTile } from '../../components/onboarding/PickerTile';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { saveOnboardingGender } from '../../features/onboarding/onboardingProfileService';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
 
 const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'];
-const GENDER_TO_DB = {
-  Female: 'female',
-  Male: 'male',
-  'Non-binary': 'non_binary',
-  'Prefer not to say': 'prefer_not_to_say',
-};
 
 export default function GenderScreen() {
   const router = useRouter();
@@ -32,12 +26,8 @@ export default function GenderScreen() {
     setError(null);
     setLoading(true);
     try {
-      // Persist gender selection instead of dropping it between onboarding screens.
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ gender: GENDER_TO_DB[selected] ?? null })
-        .eq('id', user.id);
-      if (updateError) throw updateError;
+      // Keep onboarding persistence in a single domain service to avoid drift.
+      await saveOnboardingGender(user.id, selected);
       router.push('/onboarding/age');
     } catch (err) {
       setError(err?.message || 'Failed to save your selection');

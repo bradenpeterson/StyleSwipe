@@ -1,10 +1,9 @@
 // supabase/functions/recommendations/index.ts
 // Step 5.6 — Product recommendations by tag affinity; cold start when swipes < 5
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
-import { corsHeaders } from "../_shared/cors.ts";
-
-const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+import { requireAuthorizedUser, requireBearerToken } from "../_shared/auth.ts";
+import { handleCorsPreflight, handleFunctionError, jsonResponse, parseLimit } from "../_shared/http.ts";
+import { createAdminClient } from "../_shared/supabaseAdmin.ts";
 
 function scoreProduct(
   product: { tags?: string[] },
@@ -28,58 +27,27 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  const corsResponse = handleCorsPreflight(req);
+  if (corsResponse) {
+    return corsResponse;
   }
 
   if (req.method !== "GET") {
-    return new Response(
-      JSON.stringify({ message: "Method not allowed" }),
-      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({ message: "Method not allowed" }, 405);
   }
 
   try {
     const url = new URL(req.url);
     const userId = url.searchParams.get("user_id");
-    const limit = Math.min(
-      Math.max(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 1),
-      50
-    );
+    const limit = parseLimit(url);
 
     if (!userId) {
-      return new Response(
-        JSON.stringify({ message: "Missing user_id query param" }),
-        { status: 400, headers: jsonHeaders }
-      );
+      return jsonResponse({ message: "Missing user_id query param" }, 400);
     }
 
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
-      return new Response(
-        // Enforce strict Bearer format to avoid treating malformed headers as JWTs.
-        JSON.stringify({ message: "Missing or invalid authorization header" }),
-        { status: 401, headers: jsonHeaders }
-      );
-    }
-
-    const jwt = authHeader.slice(7).trim();
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    const {
-      data: { user },
-      error: jwtError,
-    } = await supabase.auth.getUser(jwt);
-
-    if (jwtError || !user || user.id !== userId) {
-      return new Response(JSON.stringify({ message: "Unauthorized" }), {
-        status: 403,
-        headers: jsonHeaders,
-      });
-    }
+    const jwt = requireBearerToken(req);
+    const supabase = createAdminClient();
+    await requireAuthorizedUser(supabase, jwt, userId);
 
     // Load profile (tag_scores)
     const { data: profile } = await supabase
@@ -120,9 +88,7 @@ Deno.serve(async (req: Request) => {
         tags: p.tags ?? [],
       }));
 
-      return new Response(JSON.stringify({ items }), {
-        headers: jsonHeaders,
-      });
+      return jsonResponse({ items });
     }
 
     // Warm path: score by tag affinity
@@ -150,18 +116,9 @@ Deno.serve(async (req: Request) => {
       tags: p.tags ?? [],
     }));
 
-    return new Response(JSON.stringify({ items }), {
-      headers: jsonHeaders,
-    });
+    return jsonResponse({ items });
   } catch (error) {
     console.error("recommendations error:", error);
-    const message = error instanceof Error ? error.message : String(error);
-    return new Response(
-      JSON.stringify({ message, code: "RECOMMENDATIONS_ERROR" }),
-      {
-        status: 500,
-        headers: jsonHeaders,
-      }
-    );
+    return handleFunctionError(error, "RECOMMENDATIONS_ERROR");
   }
 });

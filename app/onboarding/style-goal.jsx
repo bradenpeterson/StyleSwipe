@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PickerTile } from '../../components/onboarding/PickerTile';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { saveOnboardingStyleGoals } from '../../features/onboarding/onboardingProfileService';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
 
 const STYLE_GOAL_OPTIONS = ['Casual', 'Professional', 'Trendy', 'Athletic', 'Minimalist', 'Bohemian', 'Streetwear', 'Classic'];
@@ -32,12 +32,8 @@ export default function StyleGoalScreen() {
     setError(null);
     setLoading(true);
     try {
-      // Persist style goals so recommendations can use onboarding signals immediately.
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ style_goals: Array.from(selected).map((goal) => goal.toLowerCase()) })
-        .eq('id', user.id);
-      if (updateError) throw updateError;
+      // Keep onboarding persistence in a single domain service to avoid drift.
+      await saveOnboardingStyleGoals(user.id, selected);
       router.push('/onboarding/swipe');
     } catch (err) {
       setError(err?.message || 'Failed to save your selections');

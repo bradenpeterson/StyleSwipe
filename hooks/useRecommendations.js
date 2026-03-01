@@ -1,29 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-
-async function fetchRecommendations(accessToken, userId, limit = 20) {
-  const url = `${SUPABASE_URL}/functions/v1/recommendations?user_id=${encodeURIComponent(userId)}&limit=${limit}`;
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    let message = `recommendations failed: ${res.status}`;
-    try {
-      const data = JSON.parse(body);
-      if (data.message) message = data.message;
-    } catch (_) {}
-    throw new Error(message);
-  }
-  const data = await res.json();
-  return data.items ?? [];
-}
+import { requireAccessToken } from '../features/core/authSession';
+import { getRecommendations } from '../features/recommendations/recommendationsService';
 
 /**
  * useRecommendations(userId, limit?)
@@ -40,13 +17,8 @@ export function useRecommendations(userId, limit = 20) {
     setLoading(true);
     setError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        setError(new Error('Not authenticated'));
-        return;
-      }
-      const fetched = await fetchRecommendations(token, userId, limit);
+      const token = await requireAccessToken();
+      const fetched = await getRecommendations({ token, userId, limit });
       setItems(fetched);
     } catch (e) {
       setError(e instanceof Error ? e : new Error(String(e)));

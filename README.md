@@ -12,9 +12,10 @@ Mobile app (Expo + React Native + Expo Router) for learning a user's style from 
 
 - `app/`: Expo Router screens and navigation
 - `contexts/`: auth/session context providers
-- `hooks/`: data-fetching and mutation hooks for feed/recommendations/profile
+- `hooks/`: UI-facing hooks that orchestrate feature services
+- `features/`: domain/application services grouped by feature (`swipeFeed`, `myStyle`, `recommendations`, `onboarding`)
 - `components/`: reusable UI and feature components
-- `lib/`: shared clients/utilities (Supabase client, safe external linking)
+- `lib/`: infrastructure adapters (Supabase client, safe external linking)
 - `supabase/functions/`: Edge Functions (`swipe-feed`, `submit-swipe`, `recommendations`, `my-style`)
 - `supabase/migrations/`: database schema and migration history
 - `constants/`: tag taxonomy and theme tokens
@@ -31,3 +32,10 @@ Mobile app (Expo + React Native + Expo Router) for learning a user's style from 
 - `expo`, `react`, `react-native`, `expo-router`
 - `@supabase/supabase-js`
 - `react-native-gesture-handler`, `react-native-reanimated`
+
+## Architecture Notes
+
+- UI screens (`app/`) call hooks (`hooks/`) only.
+- Hooks call feature services (`features/`) for business workflows and API orchestration.
+- Infrastructure concerns (auth token acquisition, HTTP calling details, link opening) are centralized and shared.
+- Supabase Edge Functions share common auth/http/error helpers in `supabase/functions/_shared`.

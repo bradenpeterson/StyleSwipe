@@ -4,17 +4,10 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PickerTile } from '../../components/onboarding/PickerTile';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { saveOnboardingAgeRange } from '../../features/onboarding/onboardingProfileService';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
 
 const AGE_OPTIONS = ['18-24', '25-34', '35-44', '45-54', '55+'];
-const AGE_TO_DB = {
-  '18-24': '18_24',
-  '25-34': '25_34',
-  '35-44': '35_44',
-  '45-54': '45_54',
-  '55+': '55_plus',
-};
 
 export default function AgeScreen() {
   const router = useRouter();
@@ -33,12 +26,8 @@ export default function AgeScreen() {
     setError(null);
     setLoading(true);
     try {
-      // Persist normalized age_range values expected by the profile schema.
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ age_range: AGE_TO_DB[selected] ?? null })
-        .eq('id', user.id);
-      if (updateError) throw updateError;
+      // Keep onboarding persistence in a single domain service to avoid drift.
+      await saveOnboardingAgeRange(user.id, selected);
       router.push('/onboarding/style-goal');
     } catch (err) {
       setError(err?.message || 'Failed to save your selection');

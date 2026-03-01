@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { requireAccessToken } from '../features/core/authSession';
+import { getSwipeFeed, submitSwipeDecision } from '../features/swipeFeed/swipeFeedService';
 
 // Fallback when swipe-feed returns no items (empty DB or all swiped) so user sees outfit images.
 // Set EXPO_PUBLIC_USE_MOCK_FEED=true to always use mock outfit images (ignores DB).
 const MOCK_INSPIRATION = require('../data/mock-inspiration.json').items;
 const USE_MOCK_FEED = process.env.EXPO_PUBLIC_USE_MOCK_FEED === 'true';
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 
 function mergeUniqueById(existingItems, incomingItems) {
   const seen = new Set(existingItems.map((item) => item?.id));
@@ -17,53 +16,6 @@ function mergeUniqueById(existingItems, incomingItems) {
     next.push(item);
   }
   return next;
-}
-
-async function fetchSwipeFeed(accessToken, userId, limit = 20) {
-  const url = `${SUPABASE_URL}/functions/v1/swipe-feed?user_id=${encodeURIComponent(userId)}&limit=${limit}`;
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    let message = `swipe-feed failed: ${res.status}`;
-    try {
-      const data = JSON.parse(body);
-      if (data.message) message = data.message;
-    } catch (_) {}
-    throw new Error(message);
-  }
-  const data = await res.json();
-  return data.items ?? [];
-}
-
-async function postSubmitSwipe(accessToken, userId, itemId, direction) {
-  const url = `${SUPABASE_URL}/functions/v1/submit-swipe`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({
-      user_id: userId,
-      item_id: itemId,
-      direction,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    let message = `submit-swipe failed: ${res.status}`;
-    try {
-      const data = JSON.parse(body);
-      if (data.message) message = data.message;
-    } catch (_) {}
-    throw new Error(message);
-  }
 }
 
 /**
@@ -102,15 +54,8 @@ export function useSwipeFeed(userId, initialLimit = 20) {
             setQueue((prev) => mergeUniqueById(prev, items));
           }
         } else {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token;
-          if (!token) {
-            if (mountedRef.current) {
-              setError(new Error('Not authenticated'));
-            }
-            return;
-          }
-          let items = await fetchSwipeFeed(token, userId, limit);
+          const token = await requireAccessToken();
+          let items = await getSwipeFeed({ token, userId, limit });
           if (!items || items.length === 0) {
             items = MOCK_INSPIRATION.slice(0, limit);
           }
@@ -134,14 +79,11 @@ export function useSwipeFeed(userId, initialLimit = 20) {
   const submitSwipe = useCallback(
     async (itemId, direction) => {
       if (!userId) return;
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (token) {
-        try {
-          await postSubmitSwipe(token, userId, itemId, direction);
-        } catch (e) {
-          console.error('Submit swipe error:', e);
-        }
+      try {
+        const token = await requireAccessToken();
+        await submitSwipeDecision({ token, userId, itemId, direction });
+      } catch (e) {
+        console.error('Submit swipe error:', e);
       }
       setQueue((prev) => {
         const swipedItem = prev.find((item) => item.id === itemId);
