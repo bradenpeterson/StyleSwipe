@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PickerTile } from '../../components/onboarding/PickerTile';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
 
 const STYLE_GOAL_OPTIONS = ['Casual', 'Professional', 'Trendy', 'Athletic', 'Minimalist', 'Bohemian', 'Streetwear', 'Classic'];
@@ -10,7 +12,10 @@ const STYLE_GOAL_OPTIONS = ['Casual', 'Professional', 'Trendy', 'Athletic', 'Min
 export default function StyleGoalScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [selected, setSelected] = useState(new Set());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const toggleGoal = (goal) => {
     const updated = new Set(selected);
@@ -22,9 +27,23 @@ export default function StyleGoalScreen() {
     setSelected(updated);
   };
 
-  const handleNext = () => {
-    if (selected.size === 0) return;
-    router.push('/onboarding/swipe');
+  const handleNext = async () => {
+    if (selected.size === 0 || !user?.id) return;
+    setError(null);
+    setLoading(true);
+    try {
+      // Persist style goals so recommendations can use onboarding signals immediately.
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ style_goals: Array.from(selected).map((goal) => goal.toLowerCase()) })
+        .eq('id', user.id);
+      if (updateError) throw updateError;
+      router.push('/onboarding/swipe');
+    } catch (err) {
+      setError(err?.message || 'Failed to save your selections');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -57,15 +76,20 @@ export default function StyleGoalScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
         <TouchableOpacity
-          style={[styles.button, selected.size === 0 && styles.buttonDisabled]}
+          style={[styles.button, (selected.size === 0 || loading) && styles.buttonDisabled]}
           onPress={handleNext}
-          disabled={selected.size === 0}
+          disabled={selected.size === 0 || loading}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="Next"
         >
-          <Text style={styles.buttonText}>Next</Text>
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.primaryForeground} />
+          ) : (
+            <Text style={styles.buttonText}>Next</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -101,6 +125,11 @@ const styles = StyleSheet.create({
   },
   footer: {
     gap: spacing.md,
+  },
+  error: {
+    ...typography.caption,
+    color: colors.error,
+    textAlign: 'center',
   },
   button: {
     backgroundColor: colors.primary,

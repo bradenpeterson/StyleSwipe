@@ -8,12 +8,12 @@ import {
   FlatList,
   Image,
   useWindowDimensions,
-  Linking,
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRecommendations } from '../../hooks/useRecommendations';
+import { openExternalUrl } from '../../lib/safeLinking';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
 
 const NUM_COLUMNS = 2;
@@ -79,14 +79,19 @@ export default function RecommendationsScreen() {
     paddingHorizontal: horizontalPadding,
   };
 
-  const handleBuyNow = (product) => {
-    if (product?.buy_url) Linking.openURL(product.buy_url);
+  const handleBuyNow = async (product) => {
+    // Validate and guard external URLs before opening.
+    await openExternalUrl(product?.buy_url);
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
+    try {
+      await refetch();
+    } finally {
+      // Always reset pull-to-refresh spinner even on errors.
+      setRefreshing(false);
+    }
   };
 
   if (!user) {
@@ -132,7 +137,7 @@ export default function RecommendationsScreen() {
       <FlatList
         data={items}
         numColumns={NUM_COLUMNS}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         columnWrapperStyle={[styles.row, { marginBottom: gap }]}
         contentContainerStyle={styles.gridContent}
         refreshControl={

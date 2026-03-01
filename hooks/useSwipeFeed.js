@@ -8,6 +8,17 @@ const USE_MOCK_FEED = process.env.EXPO_PUBLIC_USE_MOCK_FEED === 'true';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 
+function mergeUniqueById(existingItems, incomingItems) {
+  const seen = new Set(existingItems.map((item) => item?.id));
+  const next = [...existingItems];
+  for (const item of incomingItems) {
+    if (!item?.id || seen.has(item.id)) continue;
+    seen.add(item.id);
+    next.push(item);
+  }
+  return next;
+}
+
 async function fetchSwipeFeed(accessToken, userId, limit = 20) {
   const url = `${SUPABASE_URL}/functions/v1/swipe-feed?user_id=${encodeURIComponent(userId)}&limit=${limit}`;
   const res = await fetch(url, {
@@ -65,33 +76,56 @@ export function useSwipeFeed(userId, initialLimit = 20) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const swipeHistoryRef = useRef([]);
+  const mountedRef = useRef(true);
+  const refillTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (refillTimeoutRef.current) {
+        clearTimeout(refillTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const fetchMore = useCallback(
     async (limit = initialLimit) => {
       if (!userId) return;
       try {
+        if (!mountedRef.current) return;
         setLoading(true);
         setError(null);
         if (USE_MOCK_FEED) {
           const items = MOCK_INSPIRATION.slice(0, limit);
-          setQueue((prev) => [...prev, ...items]);
+          // Deduplicate by id so retries/refills do not keep appending the same cards.
+          if (mountedRef.current) {
+            setQueue((prev) => mergeUniqueById(prev, items));
+          }
         } else {
           const { data: sessionData } = await supabase.auth.getSession();
           const token = sessionData?.session?.access_token;
           if (!token) {
-            setError(new Error('Not authenticated'));
+            if (mountedRef.current) {
+              setError(new Error('Not authenticated'));
+            }
             return;
           }
           let items = await fetchSwipeFeed(token, userId, limit);
           if (!items || items.length === 0) {
             items = MOCK_INSPIRATION.slice(0, limit);
           }
-          setQueue((prev) => [...prev, ...items]);
+          if (mountedRef.current) {
+            setQueue((prev) => mergeUniqueById(prev, items));
+          }
         }
       } catch (e) {
-        setError(e instanceof Error ? e : new Error(String(e)));
+        if (mountedRef.current) {
+          setError(e instanceof Error ? e : new Error(String(e)));
+        }
       } finally {
-        setLoading(false);
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
     },
     [userId, initialLimit]
@@ -115,7 +149,11 @@ export function useSwipeFeed(userId, initialLimit = 20) {
           swipeHistoryRef.current = [swipedItem, ...swipeHistoryRef.current].slice(0, 3);
         }
         const next = prev.filter((item) => item.id !== itemId);
-        if (next.length < 3) setTimeout(() => fetchMore(initialLimit), 0);
+        if (next.length < 3) {
+          // Keep only one queued refill to avoid burst fetches during fast swiping.
+          if (refillTimeoutRef.current) clearTimeout(refillTimeoutRef.current);
+          refillTimeoutRef.current = setTimeout(() => fetchMore(initialLimit), 0);
+        }
         return next;
       });
     },
@@ -130,12 +168,19 @@ export function useSwipeFeed(userId, initialLimit = 20) {
   }, []);
 
   useEffect(() => {
+    if (refillTimeoutRef.current) {
+      // Clear pending refills when session/user changes to avoid stale fetches.
+      clearTimeout(refillTimeoutRef.current);
+      refillTimeoutRef.current = null;
+    }
     if (!userId) {
+      setQueue([]);
+      setError(null);
       setLoading(false);
       return;
     }
     fetchMore(initialLimit);
-  }, [userId]);
+  }, [userId, fetchMore, initialLimit]);
 
   return { queue, loading, error, submitSwipe, fetchMore, undoLastSwipe };
 }

@@ -17,7 +17,7 @@ export default function OnboardingSwipeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { queue, loading, error, submitSwipe } = useSwipeFeed(user?.id, 20);
+  const { queue, loading, error, submitSwipe, fetchMore } = useSwipeFeed(user?.id, 20);
 
   const handleSwipe = async (itemId, direction) => {
     await submitSwipe(itemId, direction);
@@ -55,7 +55,8 @@ export default function OnboardingSwipeScreen() {
         ) : error ? (
           <View style={styles.centered}>
             <Text style={styles.errorText}>{error.message}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => {}}>
+            <TouchableOpacity style={styles.retryButton} onPress={() => fetchMore(20)}>
+              {/* Retry should actually re-request feed data after transient failures. */}
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>

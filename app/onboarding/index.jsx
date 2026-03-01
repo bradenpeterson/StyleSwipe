@@ -1,17 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-
   const handleGetStarted = () => {
     router.push('/onboarding/gender');
   };
@@ -46,16 +41,12 @@ export default function WelcomeScreen() {
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={handleGetStarted}
-          disabled={loading}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="Get Started"
         >
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <Text style={styles.primaryButtonText}>Get Started</Text>
-          )}
+          {/* Removed dead loading state: this button always navigates immediately. */}
+          <Text style={styles.primaryButtonText}>Get Started</Text>
         </TouchableOpacity>
       </View>
     </View>

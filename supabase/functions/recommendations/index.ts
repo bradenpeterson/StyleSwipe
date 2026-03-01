@@ -4,6 +4,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
 
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
 function scoreProduct(
   product: { tags?: string[] },
   tagScores: Record<string, number>
@@ -48,19 +50,20 @@ Deno.serve(async (req: Request) => {
     if (!userId) {
       return new Response(
         JSON.stringify({ message: "Missing user_id query param" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       );
     }
 
     const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
       return new Response(
-        JSON.stringify({ message: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        // Enforce strict Bearer format to avoid treating malformed headers as JWTs.
+        JSON.stringify({ message: "Missing or invalid authorization header" }),
+        { status: 401, headers: jsonHeaders }
       );
     }
 
-    const jwt = authHeader.replace("Bearer ", "");
+    const jwt = authHeader.slice(7).trim();
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -74,7 +77,7 @@ Deno.serve(async (req: Request) => {
     if (jwtError || !user || user.id !== userId) {
       return new Response(JSON.stringify({ message: "Unauthorized" }), {
         status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
@@ -118,7 +121,7 @@ Deno.serve(async (req: Request) => {
       }));
 
       return new Response(JSON.stringify({ items }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
@@ -148,7 +151,7 @@ Deno.serve(async (req: Request) => {
     }));
 
     return new Response(JSON.stringify({ items }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: jsonHeaders,
     });
   } catch (error) {
     console.error("recommendations error:", error);
@@ -157,7 +160,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ message, code: "RECOMMENDATIONS_ERROR" }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       }
     );
   }

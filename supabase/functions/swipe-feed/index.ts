@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
 import { MOCK_ITEMS } from "./mockInspiration.ts";
 
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,19 +23,20 @@ Deno.serve(async (req: Request) => {
     if (!userId) {
       return new Response(
         JSON.stringify({ message: "Missing user_id query param" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: jsonHeaders }
       );
     }
 
     const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
       return new Response(
-        JSON.stringify({ message: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        // Enforce strict Bearer format to avoid treating malformed headers as JWTs.
+        JSON.stringify({ message: "Missing or invalid authorization header" }),
+        { status: 401, headers: jsonHeaders }
       );
     }
 
-    const jwt = authHeader.replace("Bearer ", "");
+    const jwt = authHeader.slice(7).trim();
 
     // 2. Initialize Supabase client with service role
     const supabase = createClient(
@@ -49,7 +52,7 @@ Deno.serve(async (req: Request) => {
     if (jwtError || !user || user.id !== userId) {
       return new Response(JSON.stringify({ message: "Unauthorized" }), {
         status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
@@ -110,7 +113,7 @@ Deno.serve(async (req: Request) => {
     }));
 
     return new Response(JSON.stringify({ items: result }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: jsonHeaders,
     });
   } catch (error) {
     console.error("swipe-feed error:", error);
@@ -120,7 +123,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ message, code: "FEED_ERROR" }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       }
     );
   }

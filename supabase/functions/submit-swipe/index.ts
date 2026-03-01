@@ -5,6 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
 import { updateTagScores } from "../_shared/tagScoring.ts";
 
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -19,11 +21,20 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Parse POST body
-    const body = await req.json() as {
+    let body: {
       user_id?: string;
       item_id?: string;
       direction?: "like" | "skip";
     };
+    try {
+      body = await req.json();
+    } catch {
+      // Return 400 for malformed JSON instead of bubbling as a generic 500.
+      return new Response(JSON.stringify({ message: "Invalid JSON body" }), {
+        status: 400,
+        headers: jsonHeaders,
+      });
+    }
 
     const userId = body.user_id;
     const itemId = body.item_id;
@@ -36,7 +47,7 @@ Deno.serve(async (req: Request) => {
         }),
         {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: jsonHeaders,
         }
       );
     }
@@ -46,21 +57,21 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ message: "direction must be 'like' or 'skip'" }),
         {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: jsonHeaders,
         }
       );
     }
 
     // 2. Validate JWT
     const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
       return new Response(
-        JSON.stringify({ message: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ message: "Missing or invalid authorization header" }),
+        { status: 401, headers: jsonHeaders }
       );
     }
 
-    const jwt = authHeader.replace("Bearer ", "");
+    const jwt = authHeader.slice(7).trim();
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -74,7 +85,7 @@ Deno.serve(async (req: Request) => {
     if (jwtError || !user || user.id !== userId) {
       return new Response(JSON.stringify({ message: "Unauthorized" }), {
         status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
@@ -90,7 +101,7 @@ Deno.serve(async (req: Request) => {
       const isDuplicate = insertError.code === "23505"; // unique_violation
       if (isDuplicate) {
         return new Response(JSON.stringify({ ok: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: jsonHeaders,
         });
       }
       throw insertError;
@@ -106,29 +117,36 @@ Deno.serve(async (req: Request) => {
     if (itemError || !item?.tags) {
       // Item might have been deleted; swipe was recorded, return ok
       return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
     // 5. Load profile tag_scores
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("tag_scores")
       .eq("id", userId)
       .single();
+    if (profileError) {
+      throw profileError;
+    }
 
     const tagScores = profile?.tag_scores ?? {};
 
     // 6. Update tag_scores and persist
     const newScores = updateTagScores(tagScores, item.tags, direction);
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("profiles")
       .update({ tag_scores: newScores })
       .eq("id", userId);
+    // Fail fast on write errors so clients can retry instead of assuming success.
+    if (updateError) {
+      throw updateError;
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: jsonHeaders,
     });
   } catch (error) {
     console.error("submit-swipe error:", error);
@@ -138,7 +156,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ message, code: "SUBMIT_SWIPE_ERROR" }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       }
     );
   }

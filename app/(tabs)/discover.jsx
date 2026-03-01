@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSwipeFeed } from '../../hooks/useSwipeFeed';
 import { SwipeCardStack } from '../../components/SwipeCardStack';
+import { openExternalUrl } from '../../lib/safeLinking';
 import { spacing, colors, typography, radii, minTouchTarget } from '../../constants/theme';
 
 /**
@@ -36,6 +36,11 @@ export default function DiscoverScreen() {
   const handleSwipe = async (itemId, direction) => {
     setSwipeCount((prev) => prev + 1);
     await submitSwipe(itemId, direction);
+  };
+
+  const handleOpenTopItem = async () => {
+    // Validate and guard external URLs before opening.
+    await openExternalUrl(topItem?.buy_url);
   };
 
   const FILTERS = ['All', 'tops', 'bottoms', 'shoes', 'outerwear', 'dresses', 'accessories'];
@@ -124,7 +129,7 @@ export default function DiscoverScreen() {
             <Text style={styles.actionLabel}>Undo</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => topItem?.buy_url && Linking.openURL(topItem.buy_url)}
+            onPress={handleOpenTopItem}
             style={[styles.actionButton, !topItem?.buy_url && styles.actionButtonDisabled]}
           >
             <Ionicons name="bag-outline" size={22} color={colors.text} />

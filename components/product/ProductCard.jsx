@@ -1,5 +1,6 @@
-import { View, Text, Image, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing } from '../../constants/theme';
+import { openExternalUrl } from '../../lib/safeLinking';
 
 /**
  * ProductCard — displays a single product in the recommendations/my-style grid.
@@ -7,8 +8,9 @@ import { colors, typography, radii, spacing } from '../../constants/theme';
  * @param {{ product: { id: string, name: string, image_url: string, price: number, buy_url: string } }} props
  */
 export function ProductCard({ product }) {
-  const handleBuy = () => {
-    if (product.buy_url) Linking.openURL(product.buy_url);
+  const handleBuy = async () => {
+    // Reuse shared URL safety checks for external product links.
+    await openExternalUrl(product?.buy_url);
   };
 
   return (

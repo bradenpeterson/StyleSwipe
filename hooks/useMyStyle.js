@@ -67,6 +67,10 @@ export function useMyStyle(userId) {
         fetchMyStyleItems(token, userId),
         supabase.from('profiles').select('tag_scores').eq('id', userId).single(),
       ]);
+      // Bubble profile query failures so UI does not silently show empty style DNA.
+      if (profileResult.error) {
+        throw profileResult.error;
+      }
       setItems(fetchedItems);
       setTagScores(profileResult?.data?.tag_scores ?? {});
     } catch (e) {
